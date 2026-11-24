@@ -3,16 +3,14 @@ import { StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { TabBar, type TabKey } from './src/components/TabBar';
+import { PageOverlay } from './src/components/PageOverlay';
 import { TimelineScreen } from './src/screens/TimelineScreen';
 import { RoutinesScreen } from './src/screens/RoutinesScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
-import { StatsScreen } from './src/screens/StatsScreen';
 import { EventsProvider } from './src/events';
 import { ReminderSync } from './src/components/ReminderSync';
 import { WidgetSync } from './src/widgets/WidgetSync';
-import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsProvider, useSettings } from './src/settings';
 
 export default function App() {
@@ -30,7 +28,8 @@ export default function App() {
 }
 
 function Root() {
-  const [tab, setTab] = useState<TabKey>('home');
+  const [page, setPage] = useState<'routines' | 'settings' | null>(null);
+  const closePage = () => setPage(null);
   const { theme, welcomeSeen, setWelcomeSeen } = useSettings();
 
   if (!welcomeSeen) {
@@ -40,7 +39,7 @@ function Root() {
         <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]}>
           <WelcomeScreen
             onDone={() => {
-              setTab('home');
+              setPage(null);
               setWelcomeSeen(true);
             }}
           />
@@ -60,13 +59,20 @@ function Root() {
         edges={['top', 'left', 'right']}
       >
         <View style={styles.content}>
-          {tab === 'home' && <HomeScreen onOpenTimeline={() => setTab('timeline')} />}
-          {tab === 'timeline' && <TimelineScreen />}
-          {tab === 'routines' && <RoutinesScreen />}
-          {tab === 'stats' && <StatsScreen />}
-          {tab === 'settings' && <SettingsScreen />}
+          <TimelineScreen onOpenRoutines={() => setPage('routines')} onOpenSettings={() => setPage('settings')} />
+
+          <PageOverlay visible={page === 'routines'} onClose={closePage}>
+            <SafeAreaView style={styles.root} edges={['bottom']}>
+              <RoutinesScreen onClose={closePage} />
+            </SafeAreaView>
+          </PageOverlay>
+
+          <PageOverlay visible={page === 'settings'} onClose={closePage}>
+            <SafeAreaView style={styles.root} edges={['bottom']}>
+              <SettingsScreen onClose={closePage} />
+            </SafeAreaView>
+          </PageOverlay>
         </View>
-        <TabBar active={tab} onChange={setTab} />
       </SafeAreaView>
     </>
   );

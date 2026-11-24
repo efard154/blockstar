@@ -48,12 +48,3 @@ export async function publishSnapshot(snapshot: WidgetSnapshot): Promise<void> {
   }
 }
 
-/**
- * Android only: opens the launcher's "add widget" prompt.
- * Resolves false when unsupported (Expo Go, iOS, or a launcher without pinning).
- */
-export async function requestPinWidget(kind: WidgetKind): Promise<boolean> {
-  if (!androidWidgetsAvailable) return false;
-  const lib = require('react-native-android-widget') as typeof import('react-native-android-widget');
-  return lib.requestPinWidget({ widgetName: kind }).catch(() => false);
-}

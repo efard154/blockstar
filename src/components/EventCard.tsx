@@ -6,16 +6,25 @@ import { useSettings, useThemedStyles } from '../settings';
 import type { ThemeColors } from '../themes';
 import type { BlockEvent } from '../types';
 import { formatTime } from '../utils/time';
+import { LiveProgress } from './LiveProgress';
 
 interface Props {
   event: BlockEvent;
   onPress: () => void;
+  /** 0–1 elapsed share when the event is happening right now; otherwise omitted */
+  progress?: number | null;
 }
 
-export function EventCard({ event, onPress }: Props) {
+export function EventCard({ event, onPress, progress = null }: Props) {
   const { colors, language, t } = useSettings();
   const styles = useThemedStyles(makeStyles);
-  const duration = event.duration > 0 ? formatDuration(language, event.duration) : null;
+  const live = progress !== null;
+  const remaining = live ? Math.max(1, Math.ceil(event.duration * (1 - progress))) : 0;
+  const duration =
+    event.duration > 0
+      ? formatDuration(language, event.duration) +
+        (live ? ` · ${t('remaining').replace('{time}', formatDuration(language, remaining))}` : '')
+      : null;
   return (
     <Pressable
       onPress={onPress}
@@ -36,6 +45,7 @@ export function EventCard({ event, onPress }: Props) {
         {duration && <Text style={styles.duration}>{duration}</Text>}
       </View>
       <Text style={styles.time}>{formatTime(event.start)}</Text>
+      {live && <LiveProgress progress={progress} color={colors.onPrimary} />}
     </Pressable>
   );
 }
@@ -50,6 +60,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 10,
       backgroundColor: colors.primary,
       borderRadius: radius.sm,
+      overflow: 'hidden',
     },
     pressed: { opacity: 0.85 },
     icon: { width: 36 },

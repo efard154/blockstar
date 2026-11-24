@@ -62,22 +62,17 @@ export function buildTimeline(events: BlockEvent[]): TimelineItem[] {
 }
 
 /**
- * Index to scroll to when a day opens: the current block for today,
- * otherwise the first event (or 08:00 when the day is empty).
+ * Index of the row covering the current time of day (the last row starting at
+ * or before now). Used for every date, so the timeline always opens at "now".
  */
-export function initialScrollIndex(items: TimelineItem[], isToday: boolean, now: Date): number {
-  const startOf = (item: TimelineItem) => (item.kind === 'event' ? item.event.start : item.start);
-  if (isToday) {
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    let index = 0;
-    items.forEach((item, i) => {
-      if (startOf(item) <= nowMinutes) index = i;
-    });
-    return index;
-  }
-  const firstEvent = items.findIndex((item) => item.kind === 'event');
-  if (firstEvent >= 0) return firstEvent;
-  return Math.max(0, items.findIndex((item) => startOf(item) >= 8 * 60));
+export function currentTimeIndex(items: TimelineItem[], now: Date): number {
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  let index = 0;
+  items.forEach((item, i) => {
+    const start = item.kind === 'event' ? item.event.start : item.start;
+    if (start <= nowMinutes) index = i;
+  });
+  return index;
 }
 
 /** Default start time for a new event: end of the last event, or the next whole hour. */
@@ -92,4 +87,16 @@ export function suggestStart(events: BlockEvent[], now: Date, isToday: boolean):
     return Math.min((now.getHours() + 1) * 60, MINUTES_IN_DAY - 60);
   }
   return 9 * 60;
+}
+
+/** Weekday order for pickers and day chips: Monday first (0 = Sunday in Date.getDay()). */
+export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/** 135 -> "2h 15m"; compact form for summaries. */
+export function formatHoursShort(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }

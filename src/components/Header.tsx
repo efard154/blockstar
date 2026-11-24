@@ -1,18 +1,16 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { useSettings, useThemedStyles } from '../settings';
 import type { ThemeColors } from '../themes';
 
 interface Props {
   title: string;
   subtitle?: string;
-  onAdd: () => void;
   /** Shows a "Today" button when set */
   onToday?: () => void;
 }
 
-export function Header({ title, subtitle, onAdd, onToday }: Props) {
-  const { colors, t } = useSettings();
+export function Header({ title, subtitle, onToday }: Props) {
+  const { t } = useSettings();
   const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.container}>
@@ -32,15 +30,6 @@ export function Header({ title, subtitle, onAdd, onToday }: Props) {
           <Text style={styles.todayText}>{t('today')}</Text>
         </Pressable>
       )}
-      <Pressable
-        onPress={onAdd}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel={t('addEvent')}
-        style={({ pressed }) => pressed && styles.pressed}
-      >
-        <Feather name="plus" size={34} color={colors.text} />
-      </Pressable>
     </View>
   );
 }

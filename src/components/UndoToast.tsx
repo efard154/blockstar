@@ -13,9 +13,11 @@ interface Props {
   token: number;
   onUndo: () => void;
   onHide: () => void;
+  /** Distance from the bottom edge (e.g. to clear a floating bar) */
+  bottomOffset?: number;
 }
 
-export function UndoToast({ message, token, onUndo, onHide }: Props) {
+export function UndoToast({ message, token, onUndo, onHide, bottomOffset = 12 }: Props) {
   const { t } = useSettings();
   const styles = useThemedStyles(makeStyles);
   const anim = useRef(new Animated.Value(0)).current;
@@ -38,6 +40,7 @@ export function UndoToast({ message, token, onUndo, onHide }: Props) {
       style={[
         styles.toast,
         {
+          bottom: bottomOffset,
           opacity: anim,
           transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }],
         },
@@ -60,7 +63,6 @@ const makeStyles = (colors: ThemeColors) =>
       position: 'absolute',
       left: 12,
       right: 12,
-      bottom: 12,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
