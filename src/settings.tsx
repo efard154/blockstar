@@ -6,6 +6,19 @@ import { DEFAULT_THEME_ID, getTheme, THEMES, type Theme, type ThemeColors, type 
 
 const SETTINGS_KEY = 'blockstar:settings:v1';
 
+/** Where the pull-out menu tab sits on the screen edge. */
+export type MenuSide = 'left' | 'right';
+export type MenuHeight = 'top' | 'middle' | 'bottom';
+export type MenuPosition = `${MenuSide}-${MenuHeight}`;
+export const MENU_POSITIONS: MenuPosition[] = [
+  'left-top',
+  'left-middle',
+  'left-bottom',
+  'right-top',
+  'right-middle',
+  'right-bottom',
+];
+
 interface StoredSettings {
   language: Language;
   themeId: ThemeId;
@@ -13,6 +26,9 @@ interface StoredSettings {
   welcomeSeen: boolean;
   /** Minutes before an event to send a reminder; null = reminders off */
   reminderMinutes: number | null;
+  menuPosition: MenuPosition;
+  /** Show text labels next to the menu's popup buttons */
+  menuLabels: boolean;
 }
 
 const DEFAULTS: StoredSettings = {
@@ -20,6 +36,8 @@ const DEFAULTS: StoredSettings = {
   themeId: DEFAULT_THEME_ID,
   welcomeSeen: false,
   reminderMinutes: DEFAULT_REMINDER_MINUTES,
+  menuPosition: 'right-bottom',
+  menuLabels: true,
 };
 
 interface SettingsContextValue extends StoredSettings {
@@ -30,6 +48,8 @@ interface SettingsContextValue extends StoredSettings {
   setThemeId: (themeId: ThemeId) => void;
   setWelcomeSeen: (welcomeSeen: boolean) => void;
   setReminderMinutes: (minutes: number | null) => void;
+  setMenuPosition: (position: MenuPosition) => void;
+  setMenuLabels: (show: boolean) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -46,7 +66,11 @@ function sanitize(value: unknown): StoredSettings {
       : (REMINDER_OPTIONS as readonly unknown[]).includes(v.reminderMinutes)
         ? (v.reminderMinutes as number)
         : DEFAULTS.reminderMinutes;
-  return { language, themeId, welcomeSeen, reminderMinutes };
+  const menuPosition = MENU_POSITIONS.includes(v.menuPosition as MenuPosition)
+    ? (v.menuPosition as MenuPosition)
+    : DEFAULTS.menuPosition;
+  const menuLabels = typeof v.menuLabels === 'boolean' ? v.menuLabels : DEFAULTS.menuLabels;
+  return { language, themeId, welcomeSeen, reminderMinutes, menuPosition, menuLabels };
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -83,6 +107,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setThemeId: (themeId) => update({ themeId }),
       setWelcomeSeen: (welcomeSeen) => update({ welcomeSeen }),
       setReminderMinutes: (reminderMinutes) => update({ reminderMinutes }),
+      setMenuPosition: (menuPosition) => update({ menuPosition }),
+      setMenuLabels: (menuLabels) => update({ menuLabels }),
     };
   }, [settings, update]);
 

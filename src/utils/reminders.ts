@@ -2,7 +2,7 @@ import type { BlockEvent, Routine } from '../types';
 import { parseDateKey, routinesOn } from './routines';
 import { addDays, toDateKey } from './time';
 
-export const REMINDER_OPTIONS = [5, 10, 15, 30, 60] as const;
+export const REMINDER_OPTIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120] as const;
 export const DEFAULT_REMINDER_MINUTES = 10;
 
 /** How far ahead reminders are scheduled; the window rolls forward whenever the app opens. */

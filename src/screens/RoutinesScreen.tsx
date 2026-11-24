@@ -3,12 +3,12 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 're
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { radius } from '../theme';
 import { useEvents } from '../events';
-import { formatDuration, weekdayShort, type StringKey } from '../i18n';
+import { weekdayShort, type StringKey } from '../i18n';
 import { useSettings, useThemedStyles } from '../settings';
 import type { ThemeColors } from '../themes';
 import type { Routine } from '../types';
 import { EventModal, type EventDraft } from '../components/EventModal';
-import { WEEK_ORDER, formatHoursShort } from '../utils/stats';
+import { BackButton } from '../components/BackButton';
 import {
   EVERY_DAY,
   ROUTINE_TEMPLATES,
@@ -18,7 +18,7 @@ import {
   weeklyMinutes,
   type RoutineTemplate,
 } from '../utils/routines';
-import { formatTime, toDateKey } from '../utils/time';
+import { formatHoursShort, formatTime, toDateKey, WEEK_ORDER } from '../utils/time';
 import { routineConflict } from '../utils/conflicts';
 
 const TEMPLATE_TITLES: Record<RoutineTemplate['key'], StringKey> = {
@@ -29,7 +29,7 @@ const TEMPLATE_TITLES: Record<RoutineTemplate['key'], StringKey> = {
   bedtime: 'routineBedtime',
 };
 
-export function RoutinesScreen() {
+export function RoutinesScreen({ onClose }: { onClose: () => void }) {
   const { colors, language, t } = useSettings();
   const styles = useThemedStyles(makeStyles);
   const { routines, setRoutines, events } = useEvents();
@@ -91,68 +91,80 @@ export function RoutinesScreen() {
     return null;
   };
 
+  /** "Every day" / "Weekdays" / "Weekends", otherwise e.g. "Mon · Wed · Fri". */
+  const daysText = (days: number[]) =>
+    daysLabel(days) ??
+    WEEK_ORDER.filter((d) => days.includes(d))
+      .map((d) => {
+        const short = weekdayShort(language, d);
+        return short.charAt(0) + short.slice(1).toLowerCase();
+      })
+      .join(' · ');
+
+  const timeText = (start: number, duration: number) =>
+    duration > 0 ? `${formatTime(start)}–${formatTime(Math.min(start + duration, 24 * 60))}` : formatTime(start);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <BackButton onPress={onClose} />
         <Text style={styles.title}>{t('tabRoutines')}</Text>
         <Pressable
           onPress={() => openCreate()}
-          hitSlop={12}
+          hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={t('addRoutine')}
-          style={({ pressed }) => pressed && styles.pressed}
+          style={({ pressed }) => [styles.roundBtn, pressed && styles.pressed]}
         >
-          <Feather name="plus" size={34} color={colors.text} />
+          <Feather name="plus" size={22} color={colors.onPrimary} />
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         {routines.length > 0 ? (
           <>
-            <Text style={styles.summary}>
-              {activeCount} {t('activeRoutines')} · {formatHoursShort(weeklyMinutes(routines))} {t('perWeek')}
-            </Text>
+            <View style={styles.sectionRow}>
+              <Text style={styles.section}>{t('yourRoutines')}</Text>
+              <Text style={styles.sectionMeta}>
+                {activeCount} {t('activeRoutines')} · {formatHoursShort(weeklyMinutes(routines))} {t('perWeek')}
+              </Text>
+            </View>
 
-            {sorted.map((r) => {
-              const preset = daysLabel(r.days);
-              const end = r.start + r.duration;
-              return (
+            <View style={styles.group}>
+              {sorted.map((r, i) => (
                 <Pressable
                   key={r.id}
                   onPress={() => openEdit(r)}
-                  style={({ pressed }) => [styles.card, !r.active && styles.cardPaused, pressed && styles.pressed]}
+                  style={({ pressed }) => [styles.row, i > 0 && styles.rowDivider, pressed && styles.rowPressed]}
                   accessibilityRole="button"
-                  accessibilityLabel={`${r.title}, ${formatTime(r.start)}`}
+                  accessibilityLabel={`${r.title}, ${timeText(r.start, r.duration)}, ${daysText(r.days)}`}
                 >
                   <View style={[styles.iconBox, !r.active && styles.iconBoxPaused]}>
                     <MaterialCommunityIcons
                       name={r.icon}
-                      size={24}
+                      size={22}
                       color={r.active ? colors.onPrimary : colors.textMuted}
                     />
                   </View>
 
-                  <View style={styles.cardBody}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>
-                      {r.title}
-                    </Text>
-                    <Text style={styles.cardMeta}>
-                      {r.duration > 0 ? `${formatTime(r.start)}–${formatTime(end)}` : formatTime(r.start)}
-                      {r.duration > 0 ? ` · ${formatDuration(language, r.duration)}` : ''}
-                      {!r.active ? ` · ${t('paused')}` : ''}
-                    </Text>
-                    <View style={styles.dots}>
-                      {WEEK_ORDER.map((d) => {
-                        const on = r.days.includes(d);
-                        return (
-                          <View key={d} style={[styles.dot, on && r.active && styles.dotOn, on && !r.active && styles.dotOnPaused]}>
-                            <Text style={[styles.dotText, on && r.active && styles.dotTextOn]}>
-                              {weekdayShort(language, d).charAt(0)}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                      {preset && <Text style={styles.preset}>{preset}</Text>}
+                  <View style={styles.rowBody}>
+                    <View style={styles.titleLine}>
+                      <Text style={[styles.rowTitle, !r.active && styles.textPaused]} numberOfLines={1}>
+                        {r.title}
+                      </Text>
+                      {!r.active && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{t('paused')}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.metaLine}>
+                      <Feather name="clock" size={12} color={colors.textMuted} />
+                      <Text style={styles.metaText}>{timeText(r.start, r.duration)}</Text>
+                      <Text style={styles.metaDot}>•</Text>
+                      <Text style={styles.metaText} numberOfLines={1}>
+                        {daysText(r.days)}
+                      </Text>
                     </View>
                   </View>
 
@@ -165,12 +177,14 @@ export function RoutinesScreen() {
                     accessibilityLabel={r.title}
                   />
                 </Pressable>
-              );
-            })}
+              ))}
+            </View>
           </>
         ) : (
           <View style={styles.empty}>
-            <MaterialCommunityIcons name="sync" size={48} color={colors.textDim} />
+            <View style={styles.emptyIcon}>
+              <MaterialCommunityIcons name="sync" size={32} color={colors.primaryStrong} />
+            </View>
             <Text style={styles.emptyTitle}>{t('noRoutines')}</Text>
             <Text style={styles.emptyText}>{t('noRoutinesHint')}</Text>
           </View>
@@ -178,9 +192,11 @@ export function RoutinesScreen() {
 
         {suggestions.length > 0 && (
           <>
-            <Text style={styles.section}>{t('suggestions')}</Text>
-            <View style={styles.suggestions}>
-              {suggestions.map((tpl) => {
+            <View style={styles.sectionRow}>
+              <Text style={styles.section}>{t('suggestions')}</Text>
+            </View>
+            <View style={styles.group}>
+              {suggestions.map((tpl, i) => {
                 const title = t(TEMPLATE_TITLES[tpl.key]);
                 return (
                   <Pressable
@@ -188,18 +204,20 @@ export function RoutinesScreen() {
                     onPress={() =>
                       openCreate({ title, icon: tpl.icon, start: tpl.start, duration: tpl.duration, days: tpl.days })
                     }
-                    style={({ pressed }) => [styles.suggestion, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.row, i > 0 && styles.rowDivider, pressed && styles.rowPressed]}
                     accessibilityRole="button"
                     accessibilityLabel={`${t('addRoutine')}: ${title}`}
                   >
-                    <MaterialCommunityIcons name={tpl.icon} size={20} color={colors.primaryStrong} />
-                    <View style={styles.suggestionBody}>
-                      <Text style={styles.suggestionTitle}>{title}</Text>
-                      <Text style={styles.suggestionMeta}>
-                        {formatTime(tpl.start)} · {daysLabel(tpl.days) ?? tpl.days.length + '×'}
+                    <View style={styles.suggestionIcon}>
+                      <MaterialCommunityIcons name={tpl.icon} size={20} color={colors.primaryStrong} />
+                    </View>
+                    <View style={styles.rowBody}>
+                      <Text style={styles.rowTitle}>{title}</Text>
+                      <Text style={styles.metaText}>
+                        {timeText(tpl.start, tpl.duration)} · {daysText(tpl.days)}
                       </Text>
                     </View>
-                    <Feather name="plus-circle" size={20} color={colors.textMuted} />
+                    <Feather name="plus-circle" size={22} color={colors.primaryStrong} />
                   </Pressable>
                 );
               })}
@@ -230,76 +248,85 @@ const makeStyles = (colors: ThemeColors) =>
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 24,
-      paddingBottom: 12,
-    },
-    title: { color: colors.text, fontSize: 26, fontWeight: '800' },
-    pressed: { opacity: 0.7 },
-    content: { paddingHorizontal: 12, paddingBottom: 32, gap: 10 },
-    summary: { color: colors.textMuted, fontSize: 14, paddingHorizontal: 8, marginBottom: 2 },
-    card: {
-      flexDirection: 'row',
-      alignItems: 'center',
       gap: 12,
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      padding: 12,
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 4,
     },
-    cardPaused: { opacity: 0.75 },
-    iconBox: {
-      width: 44,
-      height: 44,
-      borderRadius: radius.md,
-      backgroundColor: colors.primary,
+    title: { color: colors.text, fontSize: 26, fontWeight: '800', flex: 1 },
+    roundBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: colors.primaryStrong,
     },
-    iconBoxPaused: { backgroundColor: colors.surfaceAlt },
-    cardBody: { flex: 1, gap: 3 },
-    cardTitle: { color: colors.text, fontSize: 17, fontWeight: '600' },
-    cardMeta: { color: colors.textMuted, fontSize: 13 },
-    dots: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-    dot: {
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      backgroundColor: colors.surfaceAlt,
-      alignItems: 'center',
-      justifyContent: 'center',
+    pressed: { opacity: 0.7 },
+    content: { paddingHorizontal: 16, paddingBottom: 32 },
+    sectionRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      gap: 8,
+      marginTop: 20,
+      marginBottom: 8,
+      paddingHorizontal: 4,
     },
-    dotOn: { backgroundColor: colors.primary },
-    dotOnPaused: { backgroundColor: colors.border },
-    dotText: { color: colors.textDim, fontSize: 10, fontWeight: '700' },
-    dotTextOn: { color: colors.onPrimary },
-    preset: { color: colors.textDim, fontSize: 12, marginLeft: 4 },
-    empty: { alignItems: 'center', gap: 8, paddingVertical: 48, paddingHorizontal: 24 },
-    emptyTitle: { color: colors.text, fontSize: 18, fontWeight: '700' },
-    emptyText: { color: colors.textMuted, fontSize: 14, textAlign: 'center' },
-    section: {
-      color: colors.textMuted,
-      fontSize: 13,
-      fontWeight: '600',
-      textTransform: 'uppercase',
-      marginTop: 14,
-      paddingHorizontal: 8,
-    },
-    suggestions: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      overflow: 'hidden',
-    },
-    suggestion: {
+    section: { color: colors.textMuted, fontSize: 13, fontWeight: '600', textTransform: 'uppercase' },
+    sectionMeta: { color: colors.textDim, fontSize: 12 },
+    group: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
+    row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
       paddingHorizontal: 14,
       paddingVertical: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.surfaceAlt,
+      minHeight: 64,
     },
-    suggestionBody: { flex: 1 },
-    suggestionTitle: { color: colors.text, fontSize: 15 },
-    suggestionMeta: { color: colors.textMuted, fontSize: 12, marginTop: 1 },
+    rowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+    rowPressed: { backgroundColor: colors.surfaceAlt },
+    iconBox: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    iconBoxPaused: { backgroundColor: colors.surfaceAlt },
+    rowBody: { flex: 1, gap: 4 },
+    titleLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    rowTitle: { color: colors.text, fontSize: 16, fontWeight: '600', flexShrink: 1 },
+    textPaused: { color: colors.textMuted },
+    badge: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      backgroundColor: colors.surfaceAlt,
+    },
+    badgeText: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+    metaLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    metaText: { color: colors.textMuted, fontSize: 13, flexShrink: 1, fontVariant: ['tabular-nums'] },
+    metaDot: { color: colors.textDim, fontSize: 10 },
+    suggestionIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceAlt,
+    },
+    empty: { alignItems: 'center', gap: 8, paddingTop: 48, paddingBottom: 16, paddingHorizontal: 24 },
+    emptyIcon: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+      marginBottom: 4,
+    },
+    emptyTitle: { color: colors.text, fontSize: 18, fontWeight: '700' },
+    emptyText: { color: colors.textMuted, fontSize: 14, textAlign: 'center' },
   });

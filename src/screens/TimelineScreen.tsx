@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, LayoutAnimation, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, FlatList, LayoutAnimation, StyleSheet, View } from 'react-native';
 import { useEvents } from '../events';
 import { Header } from '../components/Header';
 import { WeekStrip } from '../components/WeekStrip';
@@ -8,6 +8,7 @@ import { AddSlot } from '../components/AddSlot';
 import { EventModal, type EventDraft } from '../components/EventModal';
 import { SwipeToDelete } from '../components/SwipeToDelete';
 import { UndoToast } from '../components/UndoToast';
+import { StickyActions, useStickyActionsSpace } from '../components/StickyActions';
 import { formatLongDate, weekdayName } from '../i18n';
 import { useSettings, useThemedStyles } from '../settings';
 import type { ThemeColors } from '../themes';
@@ -17,13 +18,19 @@ import { eventConflict, routineConflict } from '../utils/conflicts';
 import {
   addDays,
   buildTimeline,
-  initialScrollIndex,
+  currentTimeIndex,
   isSameDay,
   suggestStart,
   toDateKey,
 } from '../utils/time';
 
-export function TimelineScreen() {
+interface Props {
+  onOpenRoutines: () => void;
+  onOpenSettings: () => void;
+}
+
+export function TimelineScreen({ onOpenRoutines, onOpenSettings }: Props) {
+  const stickySpace = useStickyActionsSpace();
   const { colors, language, t } = useSettings();
   const styles = useThemedStyles(makeStyles);
   const today = useMemo(() => new Date(), []);
@@ -49,20 +56,46 @@ export function TimelineScreen() {
   );
   const timeline = useMemo(() => buildTimeline(dayEvents), [dayEvents]);
 
-  // The timeline covers the full day, so jump to the relevant hour when a day
-  // opens (current time for today, first event otherwise). Editing events
-  // does not re-scroll — only switching days or finishing the initial load.
+  // The timeline covers the full day, so it always opens at the current hour —
+  // on load, when switching days, and when the app returns to the foreground.
+  // Editing events does not re-scroll.
   const listRef = useRef<FlatList<TimelineItem>>(null);
   const timelineRef = useRef(timeline);
-  timelineRef.current = timeline;
+  useEffect(() => {
+    timelineRef.current = timeline;
+  }, [timeline]);
+  const [foregroundTick, setForegroundTick] = useState(0);
+
+  // Shared clock for the live progress bar on events happening now:
+  // ticks every 30 s and catches up immediately when the app comes back.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      setForegroundTick((n) => n + 1);
+      setNow(new Date());
+    });
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => {
+      sub.remove();
+      clearInterval(id);
+    };
+  }, []);
+  const nowKey = toDateKey(now);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  const liveProgress = (e: BlockEvent): number | null =>
+    e.date === nowKey && e.duration > 0 && nowMinutes >= e.start && nowMinutes < e.start + e.duration
+      ? (nowMinutes - e.start) / e.duration
+      : null;
   useEffect(() => {
     if (!loaded) return;
-    const index = initialScrollIndex(timelineRef.current, isToday, new Date());
+    // Wait a frame so the rows for the new day are laid out before scrolling.
     const id = setTimeout(() => {
+      const index = currentTimeIndex(timelineRef.current, new Date());
       listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0 });
-    }, 0);
+    }, 50);
     return () => clearTimeout(id);
-  }, [loaded, selectedKey, isToday]);
+  }, [loaded, selectedKey, foregroundTick]);
 
   const title = isToday
     ? t('today')
@@ -154,7 +187,6 @@ export function TimelineScreen() {
       <Header
         title={title}
         subtitle={formatLongDate(language, selected)}
-        onAdd={() => openCreate()}
         onToday={isToday ? undefined : () => setSelected(today)}
       />
       <WeekStrip today={today} selected={selected} onSelect={setSelected} />
@@ -169,6 +201,7 @@ export function TimelineScreen() {
           keyExtractor={(item) => item.key}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          extraData={now}
           renderItem={({ item }) =>
             item.kind === 'event' ? (
               <SwipeToDelete
@@ -176,7 +209,11 @@ export function TimelineScreen() {
                 label={t(item.event.routineId ? 'skip' : 'delete')}
                 icon={item.event.routineId ? 'debug-step-over' : 'trash-can-outline'}
               >
-                <EventCard event={item.event} onPress={() => openEdit(item.event)} />
+                <EventCard
+                  event={item.event}
+                  onPress={() => openEdit(item.event)}
+                  progress={liveProgress(item.event)}
+                />
               </SwipeToDelete>
             ) : (
               <AddSlot start={item.start} onPress={() => openCreate(item.start)} />
@@ -220,7 +257,10 @@ export function TimelineScreen() {
         token={removedToken}
         onUndo={undoRemove}
         onHide={() => setRemoved(null)}
+        bottomOffset={stickySpace + 4}
       />
+
+      <StickyActions onAddEvent={() => openCreate()} onRoutines={onOpenRoutines} onSettings={onOpenSettings} />
     </View>
   );
 }
@@ -228,7 +268,7 @@ export function TimelineScreen() {
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    list: { paddingHorizontal: 8, paddingTop: 8, paddingBottom: 24 },
+    list: { paddingHorizontal: 8, paddingTop: 8, paddingBottom: 16 },
     separator: { height: 10 },
     loading: { marginTop: 40 },
   });
